@@ -80,48 +80,20 @@ plt.plot()
 ########################################################
 # Expand date into more features 
 
-day = df_merge_2['Date'].apply(lambda x: x.day)
-month = df_merge_2['Date'].apply(lambda x: x.month)
-year = df_merge_2['Date'].apply(lambda x: x.year)
+day = final_features['Date'].apply(lambda x: x.day)
+month = final_features['Date'].apply(lambda x: x.month)
+year = final_features['Date'].apply(lambda x: x.year)
 
-df_merge_2['Day'] = day
-df_merge_2['Month'] = month
-df_merge_2['Year'] = year
+final_features['Day'] = day
+final_features['Month'] = month
+final_features['Year'] = year
 
-
-# Later add columns for days to next to public holidays/spending seasons(Black friday)
-
-# List of final features to use 
-#final_features_targets = ['Store', 'Temperature', 'Fuel_Price', 'MarkDown1', 
-#                  'MarkDown2', 'MarkDown3', 'MarkDown4', 'MarkDown5',
-#                  'CPI', 'Unemployment', 'IsHoliday_x', 'Dept', 'Type',
-#                  'Day', 'Month', 'Year', 'Weekly_Sales'
-#                  ]
-#                  
-#df_merge_3 = df_merge_2[final_features_targets]                  
-
-##final_data_frame_targets = df_merge_2['Weekly_Sales']
-#final_data_frame_features = df_merge_3.sort_values(by=['Year', 'Month', 'Day', 'Store', 'Dept'], ascending=True)
-
-#categorical_features = final_data_frame_features.select_dtypes(include=[np.object])
-#numerical_features = final_data_frame_features.select_dtypes(include=[np.number])
 
 categorical_features_type = pd.get_dummies(final_features['Type'])
 final_features  = final_features.join([categorical_features_type])
 final_features = final_features.drop(['Type'], axis=1)
 final_features = final_features.drop(['Date'], axis=1)
 
-#store = pd.get_dummies(final_data_frame_features['Store'])
-#store = store.rename(columns=lambda s: 'store_'+str(s))
-#
-#dept = pd.get_dummies(final_data_frame_features['Dept'])
-#dept = dept.rename(columns=lambda s: 'dept_'+str(s))
-#
-#holiday = pd.get_dummies(final_data_frame_features['IsHoliday_x'])
-#types = pd.get_dummies(final_data_frame_features['Type'])
-#
-#final_data_frame_features = final_data_frame_features.drop(['Store', 'Dept', 'IsHoliday_x', 'Type'], axis=1)
-#final_data_frame_features  = final_data_frame_features.join([store, dept, holiday, types])
 
 def get_metrics(targets, preds):
     mse = np.sqrt(metrics.mean_squared_error(targets, preds))
@@ -254,13 +226,46 @@ x.add_row(["ExtraTreeRegressor", mae_et, r2_score_et, accuracy_et])
 print(x)
 
 
+################################################
+# Lets try H2O autoML
+################################################
 
-#def pairplot(dataframe):
-#    plt.figure()
-#    sns.pairplot(dataframe)
-#    display(plt.show())
+import h2o
+from h2o.automl import H2OAutoML, get_leaderboard
 
-# Convert to categorical etc.
+h2o.init()
+
+X = ['Store', 'Temperature', 'Fuel_Price', 'MarkDown1', 
+                  'MarkDown2', 'MarkDown3', 'MarkDown4', 'MarkDown5',
+                  'CPI', 'Unemployment', 'IsHoliday', 'Dept', 'A', 'B', 'C',
+                  'Day', 'Month', 'Year'
+                  ]
+Y = 'Weekly_Sales'
+
+algos = ['DRF', 'XGBoost', 'GBM', 'DeepLearning', 'StackedEnsemble']
+#aml = H2OAutoML(max_models=30, max_runtime_secs=300, seed=1)
+aml = H2OAutoML(max_runtime_secs=300, seed=1, include_algos=algos)
+h2o_frame = h2o.H2OFrame(train)
+aml.train(x=X, y=Y, training_frame=h2o_frame)
+
+# AutoML Leaderboard
+lb1 = aml.leaderboard.as_data_frame()
+
+# Optionally edd extra model information to the leaderboard
+lb = get_leaderboard(aml, extra_columns='ALL').as_data_frame()
+
+# Print all rows (instead of default 10 rows)
+lb.as_data_frame().head()
+
+# The leader model is stored here
+aml.leader
+
+
+h2o_frame_test = h2o.H2OFrame(test)
+preds = aml.predict(h2o_frame_test)
+perf = aml.leader.model_performance(h2o_frame_test)
+
+#################################################
 
 def plot_corr_vars(df):
 
